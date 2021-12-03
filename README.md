@@ -20,3 +20,6 @@ How to mock locations in the emulator.
 https://codelabs.developers.google.com/codelabs/advanced-android-kotlin-training-maps
 4.2 Adding Geofences to Your Maps
 https://codelabs.developers.google.com/codelabs/advanced-android-kotlin-training-geofencing
+
+Step 1: Add permissions to the AndroidManifest
+In the AndroidManifest.xml. Add permissions for ACCESS_FINE_LOCATION and ACCESS_BACKGROUND_LOCATION above the application tag.
