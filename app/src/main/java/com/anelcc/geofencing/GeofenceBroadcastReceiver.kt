@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.android.treasureHunt
+package com.anelcc.geofencing
 
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -22,8 +22,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.example.android.treasureHunt.HuntMainActivity.Companion.ACTION_GEOFENCE_EVENT
+import com.anelcc.geofencing.MainActivity.Companion.ACTION_GEOFENCE_EVENT
 import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
 
 /*
@@ -37,6 +38,18 @@ import com.google.android.gms.location.GeofencingEvent
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+
+        val geofencingEvent = GeofencingEvent.fromIntent(intent)
+        if (geofencingEvent.hasError()) {
+            val errorMessage = GeofenceStatusCodes
+                .getStatusCodeString(geofencingEvent.errorCode)
+            Log.e(TAG, errorMessage)
+            return
+        }
+
+        val geofenceTransition = geofencingEvent.geofenceTransition
+
+
         if (intent.action == ACTION_GEOFENCE_EVENT) {
             val geofencingEvent = GeofencingEvent.fromIntent(intent)
 
@@ -45,6 +58,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 Log.e(TAG, errorMessage)
                 return
             }
+
 
             if (geofencingEvent.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER) {
                 Log.v(TAG, context.getString(R.string.geofence_entered))
