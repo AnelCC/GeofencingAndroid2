@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.android.treasureHunt
+package com.anelcc.geofencing
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -58,7 +58,7 @@ fun createChannel(context: Context) {
  * with the LANDMARK_DATA from GeofencingConstatns in the GeofenceUtils file.
  */
 fun NotificationManager.sendGeofenceEnteredNotification(context: Context, foundIndex: Int) {
-    val contentIntent = Intent(context, HuntMainActivity::class.java)
+    val contentIntent = Intent(context, MainActivity::class.java)
     contentIntent.putExtra(GeofencingConstants.EXTRA_GEOFENCE_INDEX, foundIndex)
     val contentPendingIntent = PendingIntent.getActivity(
         context,
@@ -78,8 +78,7 @@ fun NotificationManager.sendGeofenceEnteredNotification(context: Context, foundI
     // a custom message when a Geofence triggers.
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setContentTitle(context.getString(R.string.app_name))
-        .setContentText(context.getString(R.string.content_text,
-            context.getString(GeofencingConstants.LANDMARK_DATA[foundIndex].name)))
+        .setContentText(context.getString(R.string.content_text, context.getString(GeofencingConstants.LANDMARK_DATA[foundIndex].name)))
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setContentIntent(contentPendingIntent)
         .setSmallIcon(R.drawable.map_small)
