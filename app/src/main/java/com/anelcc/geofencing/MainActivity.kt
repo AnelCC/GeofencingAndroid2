@@ -2,6 +2,7 @@ package com.anelcc.geofencing
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentSender
@@ -12,7 +13,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.SavedStateViewModelFactory
@@ -58,6 +58,27 @@ class MainActivity : AppCompatActivity() {
         checkPermissionsAndStartGeofencing()
     }
 
+    private fun getGeofencingRequest(currentGeofenceIndex: Int): GeofencingRequest {
+        val currentGeofenceData = GeofencingConstants.LANDMARK_DATA[currentGeofenceIndex]
+        // Build the Geofence Object
+        val geofence = Geofence.Builder()
+            // Set the request ID, string to identify the geofence.
+            .setRequestId(currentGeofenceData.id)
+            // Set the circular region of this geofence.
+            .setCircularRegion(currentGeofenceData.latLong.latitude, currentGeofenceData.latLong.longitude, GeofencingConstants.GEOFENCE_RADIUS_IN_METERS)
+            // Set the expiration duration of the geofence. This geofence gets
+            // automatically removed after this period of time.
+            .setExpirationDuration(GeofencingConstants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
+            // Set the transition types of interest. Alerts are only generated for these
+            // transition. We track entry and exit transitions in this sample.
+            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+            .build()
+
+        return GeofencingRequest.Builder().apply {
+            setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+            addGeofence(geofence)
+        }.build()
+    }
 
     /*
      *  When we get the result from asking the user to turn on device location, we call
@@ -71,12 +92,6 @@ class MainActivity : AppCompatActivity() {
             checkDeviceLocationSettingsAndStartGeofence(false)
         }
     }
-   /* var resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == REQUEST_TURN_DEVICE_LOCATION_ON) {
-            // We don't rely on the result code, but just check the location setting again
-            checkDeviceLocationSettingsAndStartGeofence(false)
-        }
-    }*/
 
     /*
      *  When the user clicks on the notification, this method will be called, letting us know that
@@ -94,18 +109,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    /*
+     * In all cases, we need to have the location permission.  On Android 10+ (Q) we need to have
+     * the background permission as well.
+     */
+    @SuppressLint("MissingSuperCall")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         Log.d(TAG, "onRequestPermissionResult")
 
         if (grantResults.isEmpty() ||
             grantResults[LOCATION_PERMISSION_INDEX] == PackageManager.PERMISSION_DENIED ||
             (requestCode == REQUEST_FOREGROUND_AND_BACKGROUND_PERMISSION_RESULT_CODE &&
                     grantResults[BACKGROUND_LOCATION_PERMISSION_INDEX] ==
-                    PackageManager.PERMISSION_DENIED)) {
-
-            Snackbar.make(binding.activityMapsMain, R.string.permission_denied_explanation, Snackbar.LENGTH_INDEFINITE)
+                    PackageManager.PERMISSION_DENIED))
+        {
+            // Permission denied.
+            Snackbar.make(
+                binding.activityMapsMain,
+                R.string.permission_denied_explanation, Snackbar.LENGTH_INDEFINITE
+            )
                 .setAction(R.string.settings) {
+                    // Displays App settings screen.
                     startActivity(Intent().apply {
                         action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
                         data = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
@@ -116,7 +140,6 @@ class MainActivity : AppCompatActivity() {
             checkDeviceLocationSettingsAndStartGeofence()
         }
     }
-
 
     /**
      * This will also destroy any saved state in the associated ViewModel, so we remove the
@@ -160,17 +183,14 @@ class MainActivity : AppCompatActivity() {
                 try {
                     // Show the dialog by calling startResolutionForResult(),
                     // and check the result in onActivityResult().
-
                     exception.startResolutionForResult(this@MainActivity, REQUEST_TURN_DEVICE_LOCATION_ON)
-//                    resultLauncher.launch(intent)
                 } catch (sendEx: IntentSender.SendIntentException) {
                     Log.d(TAG, "Error geting location settings resolution: " + sendEx.message)
                 }
             } else {
                 Snackbar.make(binding.activityMapsMain, R.string.location_required_error, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(android.R.string.ok) {
-                        checkDeviceLocationSettingsAndStartGeofence()
-                    }.show()
+                    .setAction(android.R.string.ok) { checkDeviceLocationSettingsAndStartGeofence() }
+                    .show()
             }
         }
         locationSettingsResponseTask.addOnCompleteListener {
@@ -180,11 +200,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    //Create a method to check for permissions
+    /*
+     *  Determines whether the app has the appropriate permissions across Android 10+ and all other
+     *  Android versions.
+     */
+    @TargetApi(29)
     private fun foregroundAndBackgroundLocationPermissionApproved(): Boolean {
         val foregroundLocationApproved = (
-                PackageManager.PERMISSION_GRANTED ==
-                        ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION))
+                PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(this,
+                            Manifest.permission.ACCESS_FINE_LOCATION))
         val backgroundPermissionApproved =
             if (runningQOrLater) {
                 PackageManager.PERMISSION_GRANTED ==
@@ -197,18 +221,27 @@ class MainActivity : AppCompatActivity() {
         return foregroundLocationApproved && backgroundPermissionApproved
     }
 
-    //Request permissions
+    /*
+     *  Requests ACCESS_FINE_LOCATION and (on Android 10+ (Q) ACCESS_BACKGROUND_LOCATION.
+     */
+    @TargetApi(29 )
     private fun requestForegroundAndBackgroundLocationPermissions() {
         if (foregroundAndBackgroundLocationPermissionApproved())
             return
+
+        // Else request the permission
+        // this provides the result[LOCATION_PERMISSION_INDEX]
         var permissionsArray = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
         val resultCode = when {
             runningQOrLater -> {
+                // this provides the result[BACKGROUND_LOCATION_PERMISSION_INDEX]
                 permissionsArray += Manifest.permission.ACCESS_BACKGROUND_LOCATION
                 REQUEST_FOREGROUND_AND_BACKGROUND_PERMISSION_RESULT_CODE
             }
             else -> REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE
         }
+
         Log.d(TAG, "Request foreground only location permission")
         ActivityCompat.requestPermissions(
             this@MainActivity,
@@ -218,11 +251,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /*
-  * Adds a Geofence for the current clue if needed, and removes any existing Geofence. This
-  * method should be called after the user has granted the location permission.  If there are
-  * no more geofences, we remove the geofence and let the viewmodel know that the ending hint
-  * is now "active."
-  */
+     * Adds a Geofence for the current clue if needed, and removes any existing Geofence. This
+     * method should be called after the user has granted the location permission.  If there are
+     * no more geofences, we remove the geofence and let the viewmodel know that the ending hint
+     * is now "active."
+     */
     @SuppressLint("MissingPermission")
     private fun addGeofenceForClue() {
         if (viewModel.geofenceIsActive()) return
@@ -232,42 +265,17 @@ class MainActivity : AppCompatActivity() {
             viewModel.geofenceActivated()
             return
         }
-        val currentGeofenceData = GeofencingConstants.LANDMARK_DATA[currentGeofenceIndex]
-
-        // Build the Geofence Object
-        val geofence = Geofence.Builder()
-            // Set the request ID, string to identify the geofence.
-            .setRequestId(currentGeofenceData.id)
-            // Set the circular region of this geofence.
-            .setCircularRegion(currentGeofenceData.latLong.latitude, currentGeofenceData.latLong.longitude, GeofencingConstants.GEOFENCE_RADIUS_IN_METERS)
-            // Set the expiration duration of the geofence. This geofence gets
-            // automatically removed after this period of time.
-            .setExpirationDuration(GeofencingConstants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
-            // Set the transition types of interest. Alerts are only generated for these
-            // transition. We track entry and exit transitions in this sample.
-            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
-            .build()
-
-        // Build the geofence request
-        val geofencingRequest = GeofencingRequest.Builder()
-            // The INITIAL_TRIGGER_ENTER flag indicates that geofencing service should trigger a
-            // GEOFENCE_TRANSITION_ENTER notification when the geofence is added and if the device
-            // is already inside that geofence.
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-            // Add the geofences to be monitored by geofencing service.
-            .addGeofence(geofence)
-            .build()
 
         // First, remove any existing geofences that use our pending intent
         geofencingClient.removeGeofences(geofencePendingIntent)?.run {
             // Regardless of success/failure of the removal, add the new geofence
             addOnCompleteListener {
                 // Add the new geofence request with the new geofence
-                geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)?.run {
+                geofencingClient.addGeofences(getGeofencingRequest(currentGeofenceIndex), geofencePendingIntent)?.run {
                     addOnSuccessListener {
                         // Geofences added.
-                        Toast.makeText(this@MainActivity, R.string.geofences_added, Toast.LENGTH_LONG).show()
-                        Log.e("Add Geofence", geofence.requestId)
+                        Toast.makeText(this@MainActivity, R.string.geofences_added, Toast.LENGTH_SHORT).show()
+                        Log.e("Add Geofence", getGeofencingRequest(currentGeofenceIndex).geofences[currentGeofenceIndex].requestId)
                         // Tell the viewmodel that we've reached the end of the game and
                         // activated the last "geofence" --- by removing the Geofence.
                         viewModel.geofenceActivated()
@@ -305,16 +313,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     companion object {
         internal const val ACTION_GEOFENCE_EVENT = "MainActivity.ACTION_GEOFENCE_EVENT"
     }
 }
 
-
 private const val REQUEST_FOREGROUND_AND_BACKGROUND_PERMISSION_RESULT_CODE = 33
 private const val REQUEST_FOREGROUND_ONLY_PERMISSIONS_REQUEST_CODE = 34
 private const val REQUEST_TURN_DEVICE_LOCATION_ON = 29
-private const val TAG = "MainActivity"
+private const val TAG = "HuntMainActivity"
 private const val LOCATION_PERMISSION_INDEX = 0
 private const val BACKGROUND_LOCATION_PERMISSION_INDEX = 1
